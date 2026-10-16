@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b8bb8">
+  <meta name="description" content="لوحة تحكم معمل ميدلاب - إدارة الحجوزات، النتائج، التحاليل، والباقات الطبية">
+  <meta name="format-detection" content="telephone=no">
+  
+  <title>لوحة التحكم - معمل ميدلاب</title>
+  
+  <link rel="icon" type="image/png" href="images/favicon.png">
+  <link href="images/logo.png" type="image/x-icon" rel="icon">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- شاشة تحميل مبدئية -->
+  <div id="loading" class="loading-screen" role="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>جاري التحقق من الصلاحيات...</p>
+  </div>
+
+  <!-- لوحة التحكم -->
+  <div id="adminPanel" class="admin-layout" style="display:none;">
+
+    <!-- Overlay للقائمة في الموبايل -->
+    <div id="sidebarOverlay" class="sidebar-overlay" aria-hidden="true"></div>
+
+    <!-- القائمة الجانبية -->
+    <aside class="sidebar" id="sidebar" aria-label="القائمة الجانبية">
+      <div class="sidebar-brand">
+        <h2>معمل ميدلاب</h2>
+        <span>لوحة التحكم</span>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="التنقل الرئيسي">
+        <a href="#dashboard" class="nav-link active" data-section="dashboard" aria-current="page">
+          <span class="icon" aria-hidden="true">📊</span>
+          <span class="nav-text">لوحة المعلومات</span>
+        </a>
+        <a href="#patients" class="nav-link" data-section="patients">
+          <span class="icon" aria-hidden="true">👥</span>
+          <span class="nav-text">المرضى</span>
+        </a>
+        <a href="#bookings" class="nav-link" data-section="bookings">
+          <span class="icon" aria-hidden="true">📅</span>
+          <span class="nav-text">الحجوزات</span>
+        </a>
+        <a href="#results" class="nav-link" data-section="results">
+          <span class="icon" aria-hidden="true">📋</span>
+          <span class="nav-text">النتائج</span>
+        </a>
+        <a href="#passwords" class="nav-link" data-section="passwords">
+          <span class="icon" aria-hidden="true">🔑</span>
+          <span class="nav-text">كلمات السر</span>
+        </a>
+        <a href="#messages" class="nav-link" data-section="messages">
+          <span class="icon" aria-hidden="true">✉️</span>
+          <span class="nav-text">الرسائل</span>
+        </a>
+        <a href="#tests" class="nav-link" data-section="tests">
+          <span class="icon" aria-hidden="true">🧪</span>
+          <span class="nav-text">التحاليل</span>
+        </a>
+        <a href="#packages" class="nav-link" data-section="packages">
+          <span class="icon" aria-hidden="true">📦</span>
+          <span class="nav-text">الباقات</span>
+        </a>
+        <a href="#staff" class="nav-link" data-section="staff">
+          <span class="icon" aria-hidden="true">👨‍💼</span>
+          <span class="nav-text">الموظفين</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="logoutBtnMobile" class="btn-logout-mobile" type="button">
+          <span aria-hidden="true">🚪</span>
+          <span>تسجيل الخروج</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- المنطقة الرئيسية -->
+    <div class="main-area">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="menuToggle" class="menu-toggle" aria-label="فتح القائمة" aria-expanded="false" aria-controls="sidebar" type="button">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <h1 class="topbar-title" id="pageTitle">لوحة المعلومات</h1>
+        </div>
+        <div class="topbar-user">
+          <span id="userEmail" class="user-email" title=""></span>
+          <button id="logoutBtn" class="btn-logout" type="button">تسجيل الخروج</button>
+        </div>
+      </header>
+
+      <main class="content-area" id="contentArea" role="main">
+        <p class="initial-hint">اختر قسم من القائمة الجانبية للبدء.</p>
+      </main>
+    </div>
+  </div>
+
+  <script type="module">
+    import { requireAuth, logout } from './js/auth.js';
+    import { supabase } from './js/supabase.js';
+
+    // ============================================================
+    // دالة رئيسية async (لتفادي مشكلة return في top-level)
+    // ============================================================
+    async function initAdmin() {
+      const user = await requireAuth();
+
+      if (!user) {
+        return; // ✅ مسموح هنا لأننا داخل دالة
+      }
+
+      // ✅ جلب الدور من profiles
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, full_name, is_active')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      console.log('👤 User profile:', profile);
+
+      if (profileError || !profile) {
+        document.getElementById('loading').innerHTML =
+          '<p style="color:#e05260;font-weight:700;padding:1rem;text-align:center;">⚠️ لم يتم العثور على ملف تعريف الموظف.<br>تواصل مع الأدمن.</p>';
+        return;
+      }
+
+      if (!profile.is_active) {
+        document.getElementById('loading').innerHTML =
+          '<p style="color:#e05260;font-weight:700;padding:1rem;text-align:center;">⚠️ حسابك موقوف.<br>تواصل مع الأدمن.</p>';
+        return;
+      }
+
+      // ✅ تخزين بيانات المستخدم في window
+      window.currentUser = {
+        id: user.id,
+        email: user.email,
+        role: profile.role || 'viewer',
+        full_name: profile.full_name || user.email
+      };
+
+      console.log('✅ Current user:', window.currentUser);
+
+      // ✅ إظهار لوحة التحكم
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('adminPanel').style.display = 'flex';
+
+      const userEmailEl = document.getElementById('userEmail');
+      userEmailEl.textContent = window.currentUser.full_name;
+      userEmailEl.title = user.email;
+
+      // ============================================================
+      // تسجيل الخروج
+      // ============================================================
+      const handleLogout = () => {
+        if (confirm('هل أنت متأكد من تسجيل الخروج؟')) {
+          logout();
+        }
+      };
+
+      document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+      document.getElementById('logoutBtnMobile').addEventListener('click', handleLogout);
+
+      // ============================================================
+      // عناصر أساسية
+      // ============================================================
+      const navLinks = document.querySelectorAll('.nav-link');
+      const contentArea = document.getElementById('contentArea');
+      const pageTitle = document.getElementById('pageTitle');
+      const sidebar = document.getElementById('sidebar');
+      const sidebarOverlay = document.getElementById('sidebarOverlay');
+      const menuToggle = document.getElementById('menuToggle');
+
+      // ============================================================
+      // خريطة الأقسام
+      // ============================================================
+      const SECTIONS = {
+        dashboard: () => import('./js/sections/dashboard.js'),
+        patients: () => import('./js/sections/patients.js'),
+        bookings:  () => import('./js/sections/bookings.js'),
+        results:   () => import('./js/sections/results.js'),
+        messages:  () => import('./js/sections/messages.js'),
+        tests:     () => import('./js/sections/tests.js'),
+        packages:  () => import('./js/sections/packages.js'),
+        passwords: () => import('./js/sections/passwords.js?v=' + Date.now()),
+        staff:     () => import('./js/sections/staff.js'),
+      };
+
+      // ============================================================
+      // إخفاء الأقسام غير المصرح بها حسب الدور
+      // ============================================================
+      const allowedSections = {
+        admin:        ['dashboard', 'patients', 'bookings', 'results', 'passwords', 'messages', 'tests', 'packages', 'staff'],
+        technician:   ['dashboard', 'bookings', 'results', 'passwords', 'messages'],
+        receptionist: ['dashboard', 'bookings', 'results', 'passwords', 'messages'],
+        viewer:       ['dashboard', 'bookings', 'results', 'messages']
+      };
+
+      const role = window.currentUser.role;
+      const allowed = allowedSections[role] || allowedSections.viewer;
+
+      document.querySelectorAll('.nav-link').forEach(link => {
+        const section = link.dataset.section;
+        if (!allowed.includes(section)) {
+          link.style.display = 'none';
+        }
+      });
+
+      console.log(`🔒 Role "${role}" — allowed sections:`, allowed);
+
+      // ============================================================
+      // تحميل قسم ديناميكياً
+      // ============================================================
+      let currentSection = null;
+      let isLoading = false;
+
+      async function loadSection(sectionName) {
+        const loader = SECTIONS[sectionName];
+
+        if (!loader) {
+          contentArea.innerHTML = `<p class="empty-row error">القسم "${sectionName}" غير موجود.</p>`;
+          return;
+        }
+
+        if (isLoading) return;
+        isLoading = true;
+        currentSection = sectionName;
+
+        contentArea.innerHTML = `
+          <div class="section-loading" role="status" aria-live="polite">
+            <div class="spinner spinner-sm" aria-hidden="true"></div>
+            <p>جاري التحميل...</p>
+          </div>
+        `;
+
+        try {
+          const module = await loader();
+          if (currentSection !== sectionName) return;
+          await module.render(contentArea);
+        } catch (err) {
+          console.error('خطأ في تحميل القسم:', err);
+          contentArea.innerHTML = `
+            <div class="empty-row error">
+              <span aria-hidden="true">⚠️</span>
+              فشل تحميل القسم: ${err.message}
+            </div>
+          `;
+        } finally {
+          isLoading = false;
+        }
+      }
+
+      // ============================================================
+      // التنقل بين الأقسام
+      // ============================================================
+      navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+
+          navLinks.forEach(l => {
+            l.classList.remove('active');
+            l.removeAttribute('aria-current');
+          });
+          link.classList.add('active');
+          link.setAttribute('aria-current', 'page');
+
+          const section = link.dataset.section;
+          const label = link.querySelector('.nav-text')?.textContent.trim() || link.textContent.trim();
+          pageTitle.textContent = label;
+          document.title = `${label} - معمل ميدلاب`;
+
+          loadSection(section);
+
+          if (window.innerWidth <= 768) {
+            closeSidebar();
+          }
+        });
+      });
+
+      // ============================================================
+      // التحكم في القائمة الجانبية (الموبايل)
+      // ============================================================
+      function openSidebar() {
+        sidebar.classList.add('sidebar-open');
+        sidebarOverlay.classList.add('active');
+        sidebarOverlay.setAttribute('aria-hidden', 'false');
+        menuToggle.setAttribute('aria-expanded', 'true');
+        menuToggle.setAttribute('aria-label', 'إغلاق القائمة');
+        document.body.classList.add('sidebar-open-mobile');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeSidebar() {
+        sidebar.classList.remove('sidebar-open');
+        sidebarOverlay.classList.remove('active');
+        sidebarOverlay.setAttribute('aria-hidden', 'true');
+        menuToggle.setAttribute('aria-expanded', 'false');
+        menuToggle.setAttribute('aria-label', 'فتح القائمة');
+        document.body.classList.remove('sidebar-open-mobile');
+        document.body.style.overflow = '';
+      }
+
+      function toggleSidebar() {
+        if (sidebar.classList.contains('sidebar-open')) {
+          closeSidebar();
+        } else {
+          openSidebar();
+        }
+      }
+
+      if (menuToggle) {
+        menuToggle.addEventListener('click', toggleSidebar);
+      }
+
+      if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeSidebar);
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebar.classList.contains('sidebar-open')) {
+          closeSidebar();
+        }
+      });
+
+      let resizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          if (window.innerWidth > 768) {
+            closeSidebar();
+          }
+        }, 120);
+      });
+
+      let touchStartX = 0;
+      let touchEndX = 0;
+      sidebar.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+      }, { passive: true });
+      sidebar.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        if (touchEndX - touchStartX > 70) closeSidebar();
+      }, { passive: true });
+
+      // ============================================================
+      // تحميل لوحة المعلومات افتراضياً
+      // ============================================================
+      loadSection('dashboard');
+    }
+
+    // ✅ تشغيل الدالة
+    initAdmin().catch(err => {
+      console.error('❌ خطأ في initAdmin:', err);
+      document.getElementById('loading').innerHTML =
+        '<p style="color:#e05260;font-weight:700;padding:1rem;text-align:center;">⚠️ حدث خطأ غير متوقع.<br>افتح Console للمزيد.</p>';
+    });
+  </script>
+</body>
+</html>
