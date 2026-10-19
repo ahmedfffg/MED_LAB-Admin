@@ -3,7 +3,7 @@ import {
   fetchBookings, fetchBookingStats, updateBookingStatus,
   updateBooking, deleteBooking,
   formatDate, formatMoney, translateStatus,
-  translatePayment, translateSource
+  translatePayment, translateSource, translateVisitType, translateGender
 } from '../bookings.js';
 
 export async function render(container) {
@@ -39,7 +39,7 @@ export async function render(container) {
             <th>كود الحجز</th>
             <th>المريض</th>
             <th>الهاتف</th>
-            <th>المصدر</th>
+            <th>الزيارة</th>
             <th>التحاليل</th>
             <th>الإجمالي</th>
             <th>المدفوع</th>
@@ -57,7 +57,7 @@ export async function render(container) {
 
     <!-- Modal تفاصيل / تعديل الحجز -->
     <div class="modal-overlay" id="bookingModal" style="display:none;">
-      <div class="modal-box" style="max-width:820px;">
+      <div class="modal-box" style="max-width:920px;">
         <div class="modal-header">
           <h3 id="bookingModalTitle">تفاصيل الحجز</h3>
           <button class="modal-close" id="closeBookingModal">✕</button>
@@ -65,7 +65,8 @@ export async function render(container) {
 
         <div class="tabs-bar">
           <button type="button" class="tab-btn active" data-tab="details">📋 التفاصيل</button>
-          <button type="button" class="tab-btn" data-tab="items">🧪 التحاليل <span class="tab-count" id="itemsTabCount">(0)</span></button>
+          <button type="button" class="tab-btn" data-tab="tests">🧪 التحاليل</button>
+          <button type="button" class="tab-btn" data-tab="location">📍 الموقع</button>
           <button type="button" class="tab-btn" data-tab="edit">✏️ تعديل</button>
         </div>
 
@@ -75,8 +76,14 @@ export async function render(container) {
           </div>
         </div>
 
-        <div class="tab-content" id="tabItems">
-          <div class="modal-body" id="bookingItemsBody">
+        <div class="tab-content" id="tabTests">
+          <div class="modal-body" id="bookingTestsBody">
+            <p>جاري التحميل...</p>
+          </div>
+        </div>
+
+        <div class="tab-content" id="tabLocation">
+          <div class="modal-body" id="bookingLocationBody">
             <p>جاري التحميل...</p>
           </div>
         </div>
@@ -85,6 +92,7 @@ export async function render(container) {
           <form id="editBookingForm" class="modal-body">
             <input type="hidden" id="editBookingId">
 
+            <h4 style="color:#0b8bb8;margin-bottom:0.8rem;">👤 بيانات المريض</h4>
             <div class="form-row">
               <div class="form-group">
                 <label>اسم المريض *</label>
@@ -93,6 +101,22 @@ export async function render(container) {
               <div class="form-group">
                 <label>الهاتف *</label>
                 <input type="tel" id="editPatientPhone" required pattern="[0-9]+">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>السن</label>
+                <input type="number" id="editPatientAge" min="0" max="120">
+              </div>
+              <div class="form-group">
+                <label>الجنس</label>
+                <select id="editPatientGender">
+                  <option value="">—</option>
+                  <option value="male">ذكر</option>
+                  <option value="female">أنثى</option>
+                  <option value="other">آخر</option>
+                </select>
               </div>
             </div>
 
@@ -111,6 +135,69 @@ export async function render(container) {
                 </select>
               </div>
             </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>الطبيب المحول</label>
+                <input type="text" id="editReferringDoctor">
+              </div>
+              <div class="form-group">
+                <label>عرفتنا منين</label>
+                <input type="text" id="editReferralSource">
+              </div>
+            </div>
+
+            <hr style="margin:1rem 0;border:none;border-top:1px dashed #dde9ef;">
+            <h4 style="color:#0b8bb8;margin-bottom:0.8rem;">🏠 بيانات الزيارة</h4>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>نوع الزيارة</label>
+                <select id="editVisitType">
+                  <option value="lab">في المعمل</option>
+                  <option value="home">عينة منزلية</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>رسوم العينة المنزلية</label>
+                <input type="number" id="editHomeVisitFee" min="0" step="0.01">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>المحافظة</label>
+                <input type="text" id="editHomeGovernorate">
+              </div>
+              <div class="form-group">
+                <label>الحي / المركز</label>
+                <input type="text" id="editHomeDistrict">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>المنطقة</label>
+                <input type="text" id="editHomeArea">
+              </div>
+              <div class="form-group">
+                <label>رقم العقار</label>
+                <input type="text" id="editHomeBuildingNumber">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>علامة مميزة</label>
+              <input type="text" id="editHomeLandmark">
+            </div>
+
+            <div class="form-group">
+              <label>رابط الموقع على الخريطة</label>
+              <input type="url" id="editLocationUrl" placeholder="https://www.google.com/maps?q=...">
+            </div>
+
+            <hr style="margin:1rem 0;border:none;border-top:1px dashed #dde9ef;">
+            <h4 style="color:#0b8bb8;margin-bottom:0.8rem;">💰 الحالة والدفع</h4>
 
             <div class="form-row">
               <div class="form-group">
@@ -138,17 +225,6 @@ export async function render(container) {
 
             <div class="form-row">
               <div class="form-group">
-                <label>الموعد (scheduled_at)</label>
-                <input type="datetime-local" id="editScheduledAt">
-              </div>
-              <div class="form-group">
-                <label>ملاحظات</label>
-                <textarea id="editNotes" rows="2"></textarea>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
                 <label>الإجمالي (ج.م)</label>
                 <input type="number" id="editTotal" min="0" step="0.01">
               </div>
@@ -156,6 +232,11 @@ export async function render(container) {
                 <label>المدفوع (ج.م)</label>
                 <input type="number" id="editPaidAmount" min="0" step="0.01">
               </div>
+            </div>
+
+            <div class="form-group">
+              <label>ملاحظات</label>
+              <textarea id="editNotes" rows="3"></textarea>
             </div>
 
             <p id="editBookingError" class="error-msg"></p>
@@ -231,24 +312,14 @@ export async function render(container) {
       }
 
       tbody.innerHTML = bookings.map(b => {
-        const items = b.booking_items || [];
-        const itemsCount = items.length;
-        const itemsPreview = itemsCount > 0
-          ? items.slice(0, 2).map(i => i.item_name).join(' + ') + (itemsCount > 2 ? ` +${itemsCount - 2}` : '')
-          : '—';
-
+        const testsCount = (b.booking_items || []).length;
         return `
         <tr>
           <td><code>${b.booking_code || '—'}</code></td>
           <td>${b.patient_name || '—'}</td>
           <td>${b.patient_phone || '—'}</td>
-          <td>${translateSource(b.source)}</td>
-          <td title="${items.map(i => i.item_name).join(' • ')}" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            <span style="background:#e8f4fb; color:#0b8bb8; padding:0.2rem 0.6rem; border-radius:8px; font-size:0.8rem; font-weight:700;">
-              ${itemsCount} عنصر
-            </span>
-            <span style="font-size:0.8rem; color:#4a6b80;">${itemsPreview}</span>
-          </td>
+          <td><span class="badge badge-${b.visit_type === 'home' ? 'warning' : 'info'}">${translateVisitType(b.visit_type)}</span></td>
+          <td><span class="badge badge-read">${testsCount}</span></td>
           <td>${formatMoney(b.total)}</td>
           <td>${formatMoney(b.paid_amount)}</td>
           <td>
@@ -267,8 +338,7 @@ export async function render(container) {
             <button class="btn-view" data-action="edit" data-id="${b.id}" style="background:#0b8bb8;">تعديل</button>
             <button class="btn-delete" data-action="delete" data-id="${b.id}">حذف</button>
           </td>
-        </tr>
-      `;
+        </tr>`;
       }).join('');
 
       tbody.querySelectorAll('.status-select').forEach(sel => {
@@ -292,13 +362,9 @@ export async function render(container) {
           const action = btn.dataset.action;
           const booking = bookings.find(b => b.id == id);
 
-          if (action === 'view') {
-            openBookingModal(booking, 'details');
-          } else if (action === 'edit') {
-            openBookingModal(booking, 'edit');
-          } else if (action === 'delete') {
-            confirmDelete(booking);
-          }
+          if (action === 'view') openBookingModal(booking, 'details');
+          else if (action === 'edit') openBookingModal(booking, 'edit');
+          else if (action === 'delete') confirmDelete(booking);
         });
       });
 
@@ -313,83 +379,99 @@ export async function render(container) {
     });
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
-    const tabMap = {
-      'details': 'tabDetails',
-      'items': 'tabItems',
-      'edit': 'tabEdit'
-    };
-    document.getElementById(tabMap[tabName]).classList.add('active');
+    const map = { details: 'tabDetails', tests: 'tabTests', location: 'tabLocation', edit: 'tabEdit' };
+    const tabEl = document.getElementById(map[tabName]);
+    if (tabEl) tabEl.classList.add('active');
 
-    document.getElementById('saveBookingBtn').style.display =
-      tabName === 'edit' ? 'inline-block' : 'none';
+    document.getElementById('saveBookingBtn').style.display = tabName === 'edit' ? 'inline-block' : 'none';
   }
 
   async function openBookingModal(booking, defaultTab = 'details') {
     currentBooking = booking;
 
-    document.getElementById('bookingModalTitle').textContent =
-      `حجز: ${booking.patient_name}`;
+    document.getElementById('bookingModalTitle').textContent = `حجز: ${booking.patient_name}`;
 
-    // ============ تبويب التفاصيل ============
-    const items = booking.booking_items || [];
-
-    const scheduledHtml = booking.scheduled_at
-      ? `<p><strong>الموعد المحجوز:</strong> ${formatDate(booking.scheduled_at)}</p>`
-      : '';
+    // ============ تاب التفاصيل ============
+    const fullAddress = booking.home_full_address || [
+      booking.home_governorate,
+      booking.home_district,
+      booking.home_area,
+      booking.home_building_number ? 'رقم العقار: ' + booking.home_building_number : '',
+      booking.home_landmark ? 'علامة مميزة: ' + booking.home_landmark : ''
+    ].filter(Boolean).join(' - ');
 
     document.getElementById('bookingDetailsBody').innerHTML = `
       <div class="msg-detail">
-        <h4 style="margin:0 0 0.75rem; color:#0b8bb8;">👤 بيانات المريض</h4>
+        <h4 style="color:#0b8bb8;margin-bottom:0.5rem;">👤 بيانات المريض</h4>
         <p><strong>الاسم:</strong> ${booking.patient_name || '—'}</p>
         <p><strong>الهاتف:</strong> ${booking.patient_phone || '—'}</p>
         <p><strong>الإيميل:</strong> ${booking.patient_email || '—'}</p>
-        ${booking.patient_id ? `<p><strong>معرّف المريض:</strong> <code>${booking.patient_id}</code></p>` : ''}
+        <p><strong>السن:</strong> ${booking.patient_age != null ? booking.patient_age + ' سنة' : '—'}</p>
+        <p><strong>الجنس:</strong> ${translateGender(booking.patient_gender)}</p>
 
-        <hr style="margin:1rem 0; border:none; border-top:1px dashed #dde9ef;">
-        <h4 style="margin:0 0 0.75rem; color:#0b8bb8;">📅 بيانات الحجز</h4>
-        <p><strong>كود الحجز:</strong> <code>${booking.booking_code || '—'}</code></p>
-        <p><strong>المصدر:</strong> ${translateSource(booking.source)}</p>
-        <p><strong>الحالة:</strong> ${translateStatus(booking.status)}</p>
+        <hr style="margin:0.8rem 0;">
+        <h4 style="color:#0b8bb8;margin-bottom:0.5rem;">🩺 بيانات التحويل</h4>
+        <p><strong>الطبيب المحول:</strong> ${booking.referring_doctor || '—'}</p>
+        <p><strong>عرفتنا منين:</strong> ${booking.referral_source || '—'}</p>
+
+        <hr style="margin:0.8rem 0;">
+        <h4 style="color:#0b8bb8;margin-bottom:0.5rem;">🏠 بيانات الزيارة</h4>
+        <p><strong>نوع الزيارة:</strong> ${translateVisitType(booking.visit_type)}</p>
+        ${booking.visit_type === 'home' ? `
+          <p><strong>المحافظة:</strong> ${booking.home_governorate || '—'}</p>
+          <p><strong>الحي / المركز:</strong> ${booking.home_district || '—'}</p>
+          <p><strong>المنطقة:</strong> ${booking.home_area || '—'}</p>
+          <p><strong>رقم العقار:</strong> ${booking.home_building_number || '—'}</p>
+          <p><strong>علامة مميزة:</strong> ${booking.home_landmark || '—'}</p>
+          <p><strong>العنوان الكامل:</strong> ${fullAddress || '—'}</p>
+          <p><strong>رسوم العينة:</strong> ${formatMoney(booking.home_visit_fee || 0)}</p>
+          ${booking.location_url ? `<p><strong>رابط الموقع:</strong> <a href="${booking.location_url}" target="_blank" rel="noopener" style="color:#0b8bb8;">فتح على Google Maps</a></p>` : ''}
+        ` : ''}
+        <p><strong>الموعد المجدول:</strong> ${booking.scheduled_at ? formatDate(booking.scheduled_at) : '—'}</p>
+
+        <hr style="margin:0.8rem 0;">
+        <h4 style="color:#0b8bb8;margin-bottom:0.5rem;">💰 الحالة والمالية</h4>
+        <p><strong>حالة الحجز:</strong> ${translateStatus(booking.status)}</p>
         <p><strong>حالة الدفع:</strong> ${translatePayment(booking.payment_status)}</p>
         <p><strong>طريقة الدفع:</strong> ${booking.payment_method || '—'}</p>
-        <p><strong>تاريخ الحجز:</strong> ${formatDate(booking.created_at)}</p>
-        ${scheduledHtml}
-
-        <hr style="margin:1rem 0; border:none; border-top:1px dashed #dde9ef;">
-        <h4 style="margin:0 0 0.75rem; color:#0b8bb8;">💰 المبالغ</h4>
+        <p><strong>المصدر:</strong> ${translateSource(booking.source)}</p>
         <p><strong>الإجمالي:</strong> ${formatMoney(booking.total)}</p>
         <p><strong>المدفوع:</strong> ${formatMoney(booking.paid_amount)}</p>
         <p><strong>الباقي:</strong> ${formatMoney(booking.remaining_amount)}</p>
 
-        <hr style="margin:1rem 0; border:none; border-top:1px dashed #dde9ef;">
-        <h4 style="margin:0 0 0.75rem; color:#0b8bb8;">📝 ملاحظات</h4>
-        <p>${booking.notes || '—'}</p>
-
-        <hr style="margin:1rem 0; border:none; border-top:1px dashed #dde9ef;">
-        <h4 style="margin:0 0 0.75rem; color:#0b8bb8;">🧪 ملخص التحاليل</h4>
-        <p><strong>عدد العناصر:</strong> ${items.length} عنصر</p>
-        ${items.length > 0 ? `
-          <ul style="margin:0.5rem 0; padding-right:1.25rem; color:#3c6478;">
-            ${items.map(i => `<li>${i.item_name} — ${i.quantity} × ${formatMoney(i.unit_price)} = <strong>${formatMoney(i.line_total)}</strong></li>`).join('')}
-          </ul>
-        ` : '<p style="color:#8a9ba8;">مفيش تحاليل مسجلة لهذا الحجز</p>'}
+        <hr style="margin:0.8rem 0;">
+        <p><strong>تاريخ الحجز:</strong> ${formatDate(booking.created_at)}</p>
+        <p><strong>ملاحظات:</strong> ${booking.notes || '—'}</p>
       </div>
     `;
 
-    // ============ تبويب التحاليل ============
-    document.getElementById('itemsTabCount').textContent = `(${items.length})`;
-
+    // ============ تاب التحاليل ============
+    const items = booking.booking_items || [];
     if (items.length === 0) {
-      document.getElementById('bookingItemsBody').innerHTML =
-        '<p class="empty-row">مفيش تحاليل مسجلة لهذا الحجز</p>';
+      document.getElementById('bookingTestsBody').innerHTML = '<p class="empty-row">لا توجد تحاليل مسجلة لهذا الحجز</p>';
     } else {
-      const itemsTotal = items.reduce((sum, i) => sum + (Number(i.line_total) || 0), 0);
+      let itemsTotal = 0;
+      const rows = items.map((it, idx) => {
+        itemsTotal += Number(it.line_total) || 0;
+        const typeLabel = it.item_type === 'package' ? '📦 باقة' : '🧪 تحليل';
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${typeLabel}</td>
+            <td>${it.item_name || '—'}</td>
+            <td>${formatMoney(it.unit_price)}</td>
+            <td>${it.quantity}</td>
+            <td>${formatMoney(it.line_total)}</td>
+          </tr>
+        `;
+      }).join('');
 
-      document.getElementById('bookingItemsBody').innerHTML = `
+      document.getElementById('bookingTestsBody').innerHTML = `
         <div class="table-wrapper">
           <table class="data-table">
             <thead>
               <tr>
+                <th>#</th>
                 <th>النوع</th>
                 <th>الاسم</th>
                 <th>سعر الوحدة</th>
@@ -397,57 +479,84 @@ export async function render(container) {
                 <th>الإجمالي</th>
               </tr>
             </thead>
-            <tbody>
-              ${items.map(i => `
-                <tr>
-                  <td>
-                    <span class="badge badge-read">${i.item_type === 'package' ? 'باقة' : 'تحليل'}</span>
-                  </td>
-                  <td>${i.item_name || '—'}</td>
-                  <td>${formatMoney(i.unit_price)}</td>
-                  <td>${i.quantity || 1}</td>
-                  <td><strong>${formatMoney(i.line_total)}</strong></td>
-                </tr>
-              `).join('')}
-            </tbody>
-            <tfoot>
-              <tr style="background:#f0f9ff;">
-                <td colspan="4" style="text-align:left; font-weight:700;">الإجمالي</td>
-                <td style="font-weight:800; color:#0b8bb8;">${formatMoney(itemsTotal)}</td>
-              </tr>
-            </tfoot>
+            <tbody>${rows}</tbody>
           </table>
+        </div>
+        <div style="margin-top:1rem;padding:0.8rem 1rem;background:#f0f9ff;border-radius:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+          <strong>إجمالي البنود:</strong>
+          <strong style="color:#0b8bb8;font-size:1.1rem;">${formatMoney(itemsTotal)}</strong>
         </div>
       `;
     }
 
-    // ============ تبويب التعديل ============
+    // ============ تاب الموقع ============
+    if (booking.visit_type === 'home') {
+      const hasCoords = booking.location_lat && booking.location_lng;
+      const mapLink = booking.location_url;
+
+      document.getElementById('bookingLocationBody').innerHTML = `
+        <div style="margin-bottom:1rem;">
+          <p><strong>نوع الزيارة:</strong> عينة منزلية</p>
+          <p><strong>العنوان الكامل:</strong> ${fullAddress || '—'}</p>
+          ${mapLink ? `<p><strong>رابط Google Maps:</strong> <a href="${mapLink}" target="_blank" rel="noopener" style="color:#0b8bb8;font-weight:700;">اضغط للفتح</a></p>` : '<p style="color:#e05260;">لم يتم تسجيل رابط الموقع</p>'}
+          ${hasCoords ? `<p><strong>الإحداثيات:</strong> <span style="direction:ltr;display:inline-block;font-family:monospace;">${booking.location_lat} , ${booking.location_lng}</span></p>` : ''}
+        </div>
+        ${hasCoords ? `
+          <div id="admin-map" style="height:400px;border-radius:12px;overflow:hidden;"></div>
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+        ` : '<p class="empty-row">لا توجد إحداثيات مسجلة</p>'}
+      `;
+
+      if (hasCoords && typeof L !== 'undefined') {
+        setTimeout(() => {
+          const el = document.getElementById('admin-map');
+          if (!el || el._leaflet_id) return;
+          const map = L.map(el).setView([booking.location_lat, booking.location_lng], 15);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+          }).addTo(map);
+          L.marker([booking.location_lat, booking.location_lng]).addTo(map)
+            .bindPopup('<b>' + (booking.patient_name || '') + '</b><br>' + (fullAddress || ''))
+            .openPopup();
+        }, 250);
+      }
+    } else {
+      document.getElementById('bookingLocationBody').innerHTML = `
+        <div class="info-box" style="text-align:center;padding:2rem;">
+          <div style="font-size:3rem;margin-bottom:1rem;">🏥</div>
+          <h3>عينة في المعمل</h3>
+          <p style="color:#718b9b;">هذا الحجز عينة في المعمل، ولا يوجد عنوان منزلي.</p>
+        </div>
+      `;
+    }
+
+    // ============ تاب التعديل ============
     document.getElementById('editBookingId').value = booking.id;
     document.getElementById('editPatientName').value = booking.patient_name || '';
     document.getElementById('editPatientPhone').value = booking.patient_phone || '';
     document.getElementById('editPatientEmail').value = booking.patient_email || '';
+    document.getElementById('editPatientAge').value = booking.patient_age != null ? booking.patient_age : '';
+    document.getElementById('editPatientGender').value = booking.patient_gender || '';
     document.getElementById('editSource').value = booking.source || 'online';
+    document.getElementById('editReferringDoctor').value = booking.referring_doctor || '';
+    document.getElementById('editReferralSource').value = booking.referral_source || '';
+    document.getElementById('editVisitType').value = booking.visit_type || 'lab';
+    document.getElementById('editHomeVisitFee').value = booking.home_visit_fee || 0;
+    document.getElementById('editHomeGovernorate').value = booking.home_governorate || '';
+    document.getElementById('editHomeDistrict').value = booking.home_district || '';
+    document.getElementById('editHomeArea').value = booking.home_area || '';
+    document.getElementById('editHomeBuildingNumber').value = booking.home_building_number || '';
+    document.getElementById('editHomeLandmark').value = booking.home_landmark || '';
+    document.getElementById('editLocationUrl').value = booking.location_url || '';
     document.getElementById('editStatus').value = booking.status || 'pending';
     document.getElementById('editPaymentMethod').value = booking.payment_method || '';
     document.getElementById('editTotal').value = booking.total || 0;
     document.getElementById('editPaidAmount').value = booking.paid_amount || 0;
     document.getElementById('editNotes').value = booking.notes || '';
-
-    // scheduled_at
-    const scheduledField = document.getElementById('editScheduledAt');
-    if (booking.scheduled_at) {
-      const dt = new Date(booking.scheduled_at);
-      const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000)
-        .toISOString().slice(0, 16);
-      scheduledField.value = local;
-    } else {
-      scheduledField.value = '';
-    }
-
     document.getElementById('editBookingError').textContent = '';
 
     switchTab(defaultTab);
-
     document.getElementById('bookingModal').style.display = 'flex';
   }
 
@@ -463,19 +572,28 @@ export async function render(container) {
     const errEl = document.getElementById('editBookingError');
     const id = document.getElementById('editBookingId').value;
 
-    const scheduledValue = document.getElementById('editScheduledAt').value;
-
     const updates = {
       patient_name: document.getElementById('editPatientName').value.trim(),
       patient_phone: document.getElementById('editPatientPhone').value.trim(),
       patient_email: document.getElementById('editPatientEmail').value.trim() || null,
+      patient_age: document.getElementById('editPatientAge').value ? Number(document.getElementById('editPatientAge').value) : null,
+      patient_gender: document.getElementById('editPatientGender').value || null,
       source: document.getElementById('editSource').value,
+      referring_doctor: document.getElementById('editReferringDoctor').value.trim() || null,
+      referral_source: document.getElementById('editReferralSource').value.trim() || null,
+      visit_type: document.getElementById('editVisitType').value,
+      home_visit_fee: Number(document.getElementById('editHomeVisitFee').value) || 0,
+      home_governorate: document.getElementById('editHomeGovernorate').value.trim() || null,
+      home_district: document.getElementById('editHomeDistrict').value.trim() || null,
+      home_area: document.getElementById('editHomeArea').value.trim() || null,
+      home_building_number: document.getElementById('editHomeBuildingNumber').value.trim() || null,
+      home_landmark: document.getElementById('editHomeLandmark').value.trim() || null,
+      location_url: document.getElementById('editLocationUrl').value.trim() || null,
       status: document.getElementById('editStatus').value,
       payment_method: document.getElementById('editPaymentMethod').value || null,
       total: Number(document.getElementById('editTotal').value) || 0,
       paid_amount: Number(document.getElementById('editPaidAmount').value) || 0,
-      notes: document.getElementById('editNotes').value.trim() || null,
-      scheduled_at: scheduledValue ? new Date(scheduledValue).toISOString() : null
+      notes: document.getElementById('editNotes').value.trim() || null
     };
 
     btn.disabled = true;
