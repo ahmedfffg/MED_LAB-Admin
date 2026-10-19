@@ -3,7 +3,6 @@ import { supabase } from './supabase.js';
 
 // ================== دوال مساعدة ==================
 
-// تنسيق التاريخ
 export function formatDate(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
@@ -13,13 +12,11 @@ export function formatDate(dateStr) {
   });
 }
 
-// تنسيق المبلغ
 export function formatMoney(num) {
   if (num === null || num === undefined) return '0 ج.م';
   return Number(num).toLocaleString('ar-EG') + ' ج.م';
 }
 
-// ترجمة حالة الحجز
 export function translateStatus(status) {
   const map = {
     'pending': 'قيد الانتظار',
@@ -31,7 +28,6 @@ export function translateStatus(status) {
   return map[status] || status;
 }
 
-// ترجمة حالة الدفع
 export function translatePayment(status) {
   const map = {
     'unpaid': 'غير مدفوع',
@@ -42,7 +38,6 @@ export function translatePayment(status) {
   return map[status] || status;
 }
 
-// ترجمة مصدر الحجز
 export function translateSource(source) {
   const map = {
     'online': 'الموقع',
@@ -53,14 +48,21 @@ export function translateSource(source) {
   return map[source] || source;
 }
 
+export function translateVisitType(type) {
+  const map = {
+    'lab': 'في المعمل',
+    'home': 'عينة منزلية'
+  };
+  return map[type] || '—';
+}
+
+export function translateGender(g) {
+  const map = { 'male': 'ذكر', 'female': 'أنثى', 'other': 'آخر' };
+  return map[g] || '—';
+}
+
 // ================== جلب الحجوزات ==================
 
-/**
- * جلب الحجوزات مع الفلترة + كل تفاصيل التحاليل المختارة
- * ✅ لوحة إدارة الموقع تعرض حجوزات الموقع فقط (online)
- * ✅ كل حجز بييجي معاه booking_items كاملة
- * @param {Object} filters - { status, search }
- */
 export async function fetchBookings(filters = {}) {
   let query = supabase
     .from('bookings')
@@ -68,7 +70,7 @@ export async function fetchBookings(filters = {}) {
       *,
       booking_items ( id, item_type, item_name, unit_price, quantity, line_total )
     `)
-    .eq('source', 'online')  // ✅ الموقع فقط
+    .eq('source', 'online')
     .order('created_at', { ascending: false })
     .limit(200);
 
@@ -77,7 +79,6 @@ export async function fetchBookings(filters = {}) {
   }
 
   if (filters.search) {
-    // البحث في اسم المريض أو رقم الهاتف أو كود الحجز
     const s = `%${filters.search}%`;
     query = query.or(
       `patient_name.ilike.${s},patient_phone.ilike.${s},booking_code.ilike.${s}`
@@ -95,26 +96,14 @@ export async function fetchBookings(filters = {}) {
 // ================== إحصائيات ==================
 
 export async function fetchBookingStats() {
-  // النهاردة (من بداية اليوم)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const [allRes, todayRes, pendingRes, completedRes] = await Promise.all([
-    // ✅ الموقع فقط
-    supabase.from('bookings').select('id', { count: 'exact', head: true })
-      .eq('source', 'online'),
-    // ✅ الموقع فقط + النهاردة
-    supabase.from('bookings').select('id', { count: 'exact', head: true })
-      .eq('source', 'online')
-      .gte('created_at', today.toISOString()),
-    // ✅ الموقع فقط + pending
-    supabase.from('bookings').select('id', { count: 'exact', head: true })
-      .eq('source', 'online')
-      .eq('status', 'pending'),
-    // ✅ الموقع فقط + completed
-    supabase.from('bookings').select('id', { count: 'exact', head: true })
-      .eq('source', 'online')
-      .eq('status', 'completed')
+    supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('source', 'online'),
+    supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('source', 'online').gte('created_at', today.toISOString()),
+    supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('source', 'online').eq('status', 'pending'),
+    supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('source', 'online').eq('status', 'completed')
   ]);
 
   return {
@@ -134,30 +123,9 @@ export async function updateBookingStatus(bookingId, newStatus) {
     .eq('id', bookingId)
     .select()
     .single();
-
   if (error) throw error;
   return data;
 }
-
-// ================== جلب تفاصيل حجز واحد ==================
-
-export async function fetchBookingDetails(bookingId) {
-  const { data, error } = await supabase
-    .from('bookings')
-    .select(`
-      *,
-      booking_items (
-        id, item_type, item_name, unit_price, quantity, line_total
-      )
-    `)
-    .eq('id', bookingId)
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-// ================== تعديل حجز ==================
 
 export async function updateBooking(bookingId, updates) {
   const { data, error } = await supabase
@@ -166,7 +134,6 @@ export async function updateBooking(bookingId, updates) {
     .eq('id', bookingId)
     .select()
     .single();
-
   if (error) throw error;
   return data;
 }
@@ -178,9 +145,7 @@ export async function fetchBookingWithItems(bookingId) {
     .from('bookings')
     .select(`
       *,
-      booking_items (
-        id, item_type, item_name, unit_price, quantity, line_total
-      )
+      booking_items ( id, item_type, item_name, unit_price, quantity, line_total )
     `)
     .eq('id', bookingId)
     .single();
@@ -189,22 +154,22 @@ export async function fetchBookingWithItems(bookingId) {
   return data;
 }
 
+export async function fetchBookingDetails(bookingId) {
+  return fetchBookingWithItems(bookingId);
+}
+
 // ================== حذف حجز ==================
 
 export async function deleteBooking(bookingId) {
-  // 1. امسح تفاصيل الحجز (booking_items) الأول
   const { error: itemsError } = await supabase
     .from('booking_items')
     .delete()
     .eq('booking_id', bookingId);
-
   if (itemsError) throw itemsError;
 
-  // 2. امسح الحجز نفسه
   const { error } = await supabase
     .from('bookings')
     .delete()
     .eq('id', bookingId);
-
   if (error) throw error;
 }
