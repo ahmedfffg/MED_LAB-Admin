@@ -56,13 +56,19 @@ export function translateSource(source) {
 // ================== جلب الحجوزات ==================
 
 /**
- * جلب الحجوزات مع الفلترة
+ * جلب الحجوزات مع الفلترة + كل تفاصيل التحاليل المختارة
+ * ✅ لوحة إدارة الموقع تعرض حجوزات الموقع فقط (online)
+ * ✅ كل حجز بييجي معاه booking_items كاملة
  * @param {Object} filters - { status, search }
  */
 export async function fetchBookings(filters = {}) {
   let query = supabase
     .from('bookings')
-    .select('*')
+    .select(`
+      *,
+      booking_items ( id, item_type, item_name, unit_price, quantity, line_total )
+    `)
+    .eq('source', 'online')  // ✅ الموقع فقط
     .order('created_at', { ascending: false })
     .limit(200);
 
@@ -94,12 +100,20 @@ export async function fetchBookingStats() {
   today.setHours(0, 0, 0, 0);
 
   const [allRes, todayRes, pendingRes, completedRes] = await Promise.all([
-    supabase.from('bookings').select('id', { count: 'exact', head: true }),
+    // ✅ الموقع فقط
     supabase.from('bookings').select('id', { count: 'exact', head: true })
+      .eq('source', 'online'),
+    // ✅ الموقع فقط + النهاردة
+    supabase.from('bookings').select('id', { count: 'exact', head: true })
+      .eq('source', 'online')
       .gte('created_at', today.toISOString()),
+    // ✅ الموقع فقط + pending
     supabase.from('bookings').select('id', { count: 'exact', head: true })
+      .eq('source', 'online')
       .eq('status', 'pending'),
+    // ✅ الموقع فقط + completed
     supabase.from('bookings').select('id', { count: 'exact', head: true })
+      .eq('source', 'online')
       .eq('status', 'completed')
   ]);
 
@@ -142,6 +156,7 @@ export async function fetchBookingDetails(bookingId) {
   if (error) throw error;
   return data;
 }
+
 // ================== تعديل حجز ==================
 
 export async function updateBooking(bookingId, updates) {
@@ -155,7 +170,6 @@ export async function updateBooking(bookingId, updates) {
   if (error) throw error;
   return data;
 }
-
 
 // ================== جلب تفاصيل حجز كاملة ==================
 
