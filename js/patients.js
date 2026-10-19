@@ -8,6 +8,32 @@ export function translateGender(g) {
   return map[g] || '—';
 }
 
+export function translateVisitType(t) {
+  const map = { 'lab': 'في المعمل', 'home': 'عينة منزلية' };
+  return map[t] || '—';
+}
+
+export function translateBookingStatus(s) {
+  const map = {
+    'pending': 'قيد الانتظار',
+    'confirmed': 'مؤكد',
+    'in_progress': 'جاري',
+    'completed': 'مكتمل',
+    'cancelled': 'ملغي'
+  };
+  return map[s] || s || '—';
+}
+
+export function translatePayment(p) {
+  const map = {
+    'unpaid': 'غير مدفوع',
+    'partial': 'مدفوع جزئياً',
+    'paid': 'مدفوع',
+    'refunded': 'مسترجع'
+  };
+  return map[p] || p || '—';
+}
+
 export function formatDateShort(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
@@ -23,6 +49,11 @@ export function formatDateTime(dateStr) {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit'
   });
+}
+
+export function formatMoney(num) {
+  if (num === null || num === undefined) return '0 ج.م';
+  return Number(num).toLocaleString('ar-EG') + ' ج.م';
 }
 
 // ================== جلب المرضى ==================
@@ -91,13 +122,32 @@ export async function updatePatient(id, data) {
   return result;
 }
 
-// ================== حجوزات مريض معين ==================
+// ================== حجوزات مريض معين (كامل) ==================
 
+/**
+ * حجوزات المريض مع كل التفاصيل + booking_items
+ * ✅ الموقع فقط (online)
+ */
 export async function fetchPatientBookings(patientId) {
   const { data, error } = await supabase
     .from('bookings')
-    .select('id, booking_code, status, total, paid_amount, created_at, scheduled_at')
+    .select(`
+      id, booking_code, status, payment_status, payment_method,
+      total, paid_amount, remaining_amount,
+      created_at, scheduled_at, completed_at,
+      source, visit_type,
+      patient_name, patient_phone, patient_email,
+      patient_age, patient_gender,
+      referring_doctor, referral_source,
+      home_governorate, home_district, home_area,
+      home_building_number, home_landmark, home_full_address,
+      home_visit_fee,
+      location_lat, location_lng, location_url,
+      notes,
+      booking_items ( id, item_type, test_id, package_id, item_name, unit_price, quantity, line_total )
+    `)
     .eq('patient_id', patientId)
+    .eq('source', 'online')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data || [];
@@ -108,7 +158,7 @@ export async function fetchPatientBookings(patientId) {
 export async function fetchPatientResults(patientId) {
   const { data, error } = await supabase
     .from('results')
-    .select('id, file_name, test_type, result_date, created_at')
+    .select('id, file_name, test_type, result_date, created_at, file_path')
     .eq('patient_id', patientId)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -119,9 +169,12 @@ export async function fetchPatientResults(patientId) {
 
 export async function fetchPatientDetailedStats(patientId) {
   const [bookingsRes, resultsRes] = await Promise.all([
-    supabase.from('bookings').select('total, paid_amount, status')
-      .eq('patient_id', patientId),
-    supabase.from('results').select('id', { count: 'exact', head: true })
+    supabase.from('bookings')
+      .select('total, paid_amount, status')
+      .eq('patient_id', patientId)
+      .eq('source', 'online'),
+    supabase.from('results')
+      .select('id', { count: 'exact', head: true })
       .eq('patient_id', patientId)
   ]);
 
@@ -129,10 +182,14 @@ export async function fetchPatientDetailedStats(patientId) {
   const totalSpent = bookings.reduce((sum, b) => sum + (Number(b.total) || 0), 0);
   const totalPaid = bookings.reduce((sum, b) => sum + (Number(b.paid_amount) || 0), 0);
   const completed = bookings.filter(b => b.status === 'completed').length;
+  const pending = bookings.filter(b => b.status === 'pending').length;
+  const cancelled = bookings.filter(b => b.status === 'cancelled').length;
 
   return {
     bookingsCount: bookings.length,
     completedBookings: completed,
+    pendingBookings: pending,
+    cancelledBookings: cancelled,
     totalSpent,
     totalPaid,
     remaining: totalSpent - totalPaid,
@@ -142,22 +199,14 @@ export async function fetchPatientDetailedStats(patientId) {
 
 // ================== حذف مريض (متكامل) ==================
 
-/**
- * حذف مريض وكل ما يتعلق به:
- * 1. حذف النتائج من Storage
- * 2. حذف النتائج من جدول results
- * 3. حذف booking_items للحجوزات
- * 4. حذف الحجوزات
- * 5. حذف المريض نفسه
- */
 export async function deletePatientCompletely(patientId) {
-  // 1. جلب النتائج عشان نحذف الملفات من Storage
+  // 1. جلب النتائج لحذف الملفات من Storage
   const { data: results } = await supabase
     .from('results')
     .select('id, file_path')
     .eq('patient_id', patientId);
 
-  // 2. جلب الحجوزات عشان نحذف الـ items
+  // 2. جلب الحجوزات
   const { data: bookings } = await supabase
     .from('bookings')
     .select('id')
@@ -167,28 +216,21 @@ export async function deletePatientCompletely(patientId) {
 
   // 3. حذف الملفات من Storage
   if (results && results.length > 0) {
-    const filePaths = results
-      .map(r => r.file_path)
-      .filter(Boolean);
-
+    const filePaths = results.map(r => r.file_path).filter(Boolean);
     if (filePaths.length > 0) {
       const { error: storageError } = await supabase.storage
         .from('results')
         .remove(filePaths);
-
-      if (storageError) {
-        console.warn('⚠️ فشل حذف بعض الملفات من Storage:', storageError);
-      }
+      if (storageError) console.warn('⚠️ فشل حذف بعض الملفات:', storageError);
     }
   }
 
-  // 4. حذف booking_items للحجوزات
+  // 4. حذف booking_items
   if (bookingIds.length > 0) {
     const { error: itemsError } = await supabase
       .from('booking_items')
       .delete()
       .in('booking_id', bookingIds);
-
     if (itemsError) throw itemsError;
   }
 
@@ -197,7 +239,6 @@ export async function deletePatientCompletely(patientId) {
     .from('bookings')
     .delete()
     .eq('patient_id', patientId);
-
   if (bookingsError) throw bookingsError;
 
   // 6. حذف النتائج من الجدول
@@ -205,7 +246,6 @@ export async function deletePatientCompletely(patientId) {
     .from('results')
     .delete()
     .eq('patient_id', patientId);
-
   if (resultsError) throw resultsError;
 
   // 7. حذف المريض
@@ -213,16 +253,11 @@ export async function deletePatientCompletely(patientId) {
     .from('patients')
     .delete()
     .eq('id', patientId);
-
   if (patientError) throw patientError;
 
   return true;
 }
 
-/**
- * حذف مريض بدون حجوزاته ونتائجه (soft delete - بس يحذف من patients)
- * الحجوزات هتبقى patient_id = NULL
- */
 export async function deletePatientOnly(patientId) {
   const { error } = await supabase
     .from('patients')
